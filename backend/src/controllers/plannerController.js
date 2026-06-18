@@ -1,4 +1,4 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const Groq = require('groq-sdk');
 const PlanningReport = require('../models/PlanningReport');
 const RATES = require('../config/rates');
 
@@ -181,8 +181,8 @@ Use simple language. All amounts in INR with ₹ symbol. Be specific to Indian c
 }
 
 exports.generateAIPlan = async (req, res) => {
-  if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === 'your_gemini_api_key_here') {
-    return res.status(503).json({ success: false, message: 'AI service not configured. Please set GEMINI_API_KEY in backend/.env' });
+  if (!process.env.GROQ_API_KEY || process.env.GROQ_API_KEY === 'your_groq_api_key_here') {
+    return res.status(503).json({ success: false, message: 'AI service not configured. Please set GROQ_API_KEY in backend/.env' });
   }
 
   const area = (req.body.plotLength || 0) * (req.body.plotWidth || 0);
@@ -200,13 +200,17 @@ exports.generateAIPlan = async (req, res) => {
   let fullText = '';
 
   try {
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-    const result = await model.generateContentStream(buildPrompt(req.body));
+    const stream = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: buildPrompt(req.body) }],
+      stream: true,
+      max_tokens: 4096,
+    });
 
-    for await (const chunk of result.stream) {
-      const text = chunk.text();
+    for await (const chunk of stream) {
+      const text = chunk.choices[0]?.delta?.content || '';
       if (text) {
         fullText += text;
         res.write(`data: ${JSON.stringify({ type: 'text', text })}\n\n`);
@@ -235,7 +239,7 @@ exports.generateAIPlan = async (req, res) => {
 };
 
 exports.chatWithPlanner = async (req, res) => {
-  if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === 'your_gemini_api_key_here') {
+  if (!process.env.GROQ_API_KEY || process.env.GROQ_API_KEY === 'your_groq_api_key_here') {
     return res.status(503).json({ success: false, message: 'AI service not configured.' });
   }
 
@@ -243,23 +247,24 @@ exports.chatWithPlanner = async (req, res) => {
     const { question, planContext, history = [] } = req.body;
     if (!question?.trim()) return res.status(400).json({ success: false, message: 'Question is required.' });
 
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
-      systemInstruction: `You are a helpful Indian construction expert assistant. The user has generated a house plan with the following analysis:\n\n${planContext || 'No plan context provided.'}\n\nAnswer follow-up questions concisely and practically. Use Indian construction terminology and prices in INR.`,
+    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
+    const messages = [
+      {
+        role: 'system',
+        content: `You are a helpful Indian construction expert assistant. The user has generated a house plan with the following analysis:\n\n${planContext || 'No plan context provided.'}\n\nAnswer follow-up questions concisely and practically. Use Indian construction terminology and prices in INR.`,
+      },
+      ...history.map(h => ({ role: h.role === 'assistant' ? 'assistant' : 'user', content: h.content })),
+      { role: 'user', content: question },
+    ];
+
+    const response = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages,
+      max_tokens: 1024,
     });
 
-    // Convert history to Gemini format (roles: user / model)
-    const geminiHistory = history.map(h => ({
-      role: h.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: h.content }],
-    }));
-
-    const chat = model.startChat({ history: geminiHistory });
-    const result = await chat.sendMessage(question);
-    const answer = result.response.text();
-
-    res.json({ success: true, data: { answer } });
+    res.json({ success: true, data: { answer: response.choices[0].message.content } });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

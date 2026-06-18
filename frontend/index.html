@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BuildBihar - Construction Management Platform</title>
+
+    <!--
+      DNS prefetch + preconnect for Google Fonts.
+      preconnect warms up the TLS handshake so the font CSS fetches faster.
+    -->
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
+    <link rel="dns-prefetch" href="https://fonts.gstatic.com" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+    <!--
+      Non-blocking font load via media="print" swap trick.
+
+      WHY: A standard <link rel="stylesheet"> for Google Fonts is render-blocking —
+      the browser won't paint until the font CSS (and then the font file) are fetched.
+      On a slow 3G connection this adds 300-800 ms to FCP.
+
+      HOW: Loading with media="print" causes the browser to fetch the stylesheet
+      asynchronously (print media doesn't block rendering). The onload handler
+      immediately switches it to media="all", applying the font. Users see system-ui
+      for a brief flash then Inter — acceptable since `font-display=swap` is in the
+      Google Fonts URL, ensuring text is visible with a fallback from the start.
+
+      The <noscript> fallback restores blocking behavior for JS-disabled browsers.
+    -->
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+      />
+    </noscript>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
